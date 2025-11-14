@@ -8,9 +8,23 @@ from deferred_acceptance_with_displacement_final4 import (
 )
 
 
-def run_matching_core(student_data_path: str,
-                      course_data_path: str,
-                      output_folder_path: str):
+def _clean_df_for_json(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Replace all NaN / NA values with None so that when Flask/jsonify
+    converts the DataFrame (via .to_dict), the resulting JSON is valid.
+    JSON does not allow NaN, but it allows null (from Python None).
+    """
+    if df is None or df.empty:
+        return df
+    # pd.notnull works for both NaN and pd.NA
+    return df.where(pd.notnull(df), None)
+
+
+def run_matching_core(
+    student_data_path: str,
+    course_data_path: str,
+    output_folder_path: str,
+):
     """
     Core function for web / API use.
 
@@ -56,10 +70,13 @@ def run_matching_core(student_data_path: str,
     column_order = ["Student Name", "Assigned Course"] + pref_cols + ["Total Score"]
 
     results_df = pd.DataFrame(student_assignments)
+
     # Ensure required columns exist
     for col in column_order:
         if col not in results_df.columns:
             results_df[col] = pd.NA
+
+    # Reorder columns
     results_df = results_df[column_order]
 
     # ------------------------------------------------------------------
@@ -77,7 +94,7 @@ def run_matching_core(student_data_path: str,
             # Lowest Total Score among those placed in that course
             last_ranked_student = min(
                 assigned_students,
-                key=lambda stu: student_marks[stu]["Total Score"]
+                key=lambda stu: student_marks[stu]["Total Score"],
             )
             last_ranked_student_scores = [
                 student_marks[last_ranked_student].get(subject, "N/A")
@@ -99,7 +116,9 @@ def run_matching_core(student_data_path: str,
         }
 
         # Add per-subject scores for last ranked student
-        for subject, score in zip(course_info["subject_criteria"].keys(), last_ranked_student_scores):
+        for subject, score in zip(
+            course_info["subject_criteria"].keys(), last_ranked_student_scores
+        ):
             row[f"Last Ranked Student {subject} Score"] = score
 
         course_report_rows.append(row)
@@ -120,13 +139,22 @@ def run_matching_core(student_data_path: str,
 
         student_data = student_marks[student].copy()
         student_data["Student Name"] = student
-        student_data["Reason for not being placed"] = "No available courses in preferences"
+        student_data["Reason for not being placed"] = (
+            "No available courses in preferences"
+        )
         unplaced_students_list.append(student_data)
 
     if unplaced_students_list:
         unplaced_students_df = pd.DataFrame(unplaced_students_list)
     else:
         unplaced_students_df = pd.DataFrame()
+
+    # ------------------------------------------------------------------
+    # CLEAN DATAFRAMES FOR JSON (NaN -> None)
+    # ------------------------------------------------------------------
+    results_df = _clean_df_for_json(results_df)
+    course_report_df = _clean_df_for_json(course_report_df)
+    unplaced_students_df = _clean_df_for_json(unplaced_students_df)
 
     # ------------------------------------------------------------------
     # Save Excel outputs (same filenames as your desktop version)
@@ -145,11 +173,8 @@ def run_matching_core(student_data_path: str,
         # If you prefer, you can still create an empty file; for now we just skip
         unplaced_xlsx = None
 
-    # NOTE: we do not write the log here; Lovable can choose to create its own log.
-    # If you want to reuse your existing logging, you can adapt this part later.
-
     # ------------------------------------------------------------------
-    # Return everything the web app needs
+    # Return everything the web app / Flask API needs
     # ------------------------------------------------------------------
     return {
         "results_df": results_df,
