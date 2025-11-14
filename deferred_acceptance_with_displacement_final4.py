@@ -657,7 +657,7 @@ def select_output_folder():
     folder_path = filedialog.askdirectory()
     output_folder_path_var.set(folder_path)
 
-''''
+'''
 def main():
 
     # Create GUI
@@ -691,4 +691,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-''''
+'''
