@@ -1,7 +1,7 @@
 import os
 import pandas as pd
-import tkinter as tk
-from tkinter import filedialog
+#import tkinter as tk
+#from tkinter import filedialog
 import re
 import math
 from collections import deque  # Import deque for managing displaced students
@@ -657,7 +657,7 @@ def select_output_folder():
     folder_path = filedialog.askdirectory()
     output_folder_path_var.set(folder_path)
 
-
+''''
 def main():
 
     # Create GUI
@@ -691,4 +691,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+''''
