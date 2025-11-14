@@ -37,53 +37,73 @@ def health_check():
 
 @app.route("/api/run-matching", methods=["POST"])
 def run_matching():
-  try:
-      # --- Validate input files ---
-      if "student_file" not in request.files or "course_file" not in request.files:
-          return jsonify({"error": "Missing student_file or course_file"}), 400
+    try:
+        # --- Validate input files ---
+        if "student_file" not in request.files or "course_file" not in request.files:
+            return jsonify({"error": "Missing student_file or course_file"}), 400
 
-      student_file = request.files["student_file"]
-      course_file = request.files["course_file"]
-      run_name = request.form.get("run_name", "run")
+        student_file = request.files["student_file"]
+        course_file = request.files["course_file"]
+        run_name = request.form.get("run_name", "run")
 
-      # --- Use temporary directory for processing ---
-      with tempfile.TemporaryDirectory() as tmpdir:
-          student_path = os.path.join(tmpdir, "studentdata.xlsx")
-          course_path = os.path.join(tmpdir, "coursedata.xlsx")
+        # --- Use temporary directory for processing ---
+        with tempfile.TemporaryDirectory() as tmpdir:
+            student_path = os.path.join(tmpdir, "studentdata.xlsx")
+            course_path = os.path.join(tmpdir, "coursedata.xlsx")
 
-          student_file.save(student_path)
-          course_file.save(course_path)
+            student_file.save(student_path)
+            course_file.save(course_path)
 
-          output_folder = os.path.join(tmpdir, run_name)
-          os.makedirs(output_folder, exist_ok=True)
+            output_folder = os.path.join(tmpdir, run_name)
+            os.makedirs(output_folder, exist_ok=True)
 
-          # Run your core matching logic
-          result = run_matching_core(student_path, course_path, output_folder)
+            # Run your core matching logic
+            result = run_matching_core(student_path, course_path, output_folder)
 
-      # result is expected to contain JSON-safe lists:
-      students = result.get("students", [])
-      course_report = result.get("course_report", [])
-      unplaced = result.get("unplaced", [])
+        # result is expected to contain JSON-safe lists:
+        students = result.get("students", [])
+        course_report = result.get("course_report", [])
+        unplaced = result.get("unplaced", [])
 
-      # Build Excel files in-memory (base64)
-      excel_files = {
-          "students_xlsx": df_to_excel_base64(students),
-          "course_report_xlsx": df_to_excel_base64(course_report),
-          "unplaced_xlsx": df_to_excel_base64(unplaced),
-      }
+        # ---------- Build Excel files in-memory (base64) ----------
+        excel_files = {
+            "students_xlsx": df_to_excel_base64(students),
+            "course_report_xlsx": df_to_excel_base64(course_report),
+            "unplaced_xlsx": df_to_excel_base64(unplaced),
+        }
 
-      payload = {
-          "students": students,
-          "course_report": course_report,
-          "unplaced": unplaced,
-          "excel_files": excel_files,
-      }
+        # ---------- Build a simple text log ----------
+        log_lines = []
+        log_lines.append(f"Run name: {run_name}")
+        log_lines.append(f"Total students placed: {len(students)}")
+        log_lines.append(f"Total courses: {len(course_report)}")
+        log_lines.append(f"Total unplaced students: {len(unplaced)}")
+        log_lines.append("")
+        log_lines.append("Course summary:")
+        for course in course_report:
+            cname = course.get("Course Name", "Unknown")
+            num_posted = course.get("Number of students posted", "N/A")
+            remaining = course.get("Remaining Vacancies", "N/A")
+            log_lines.append(
+                f" - {cname}: posted={num_posted}, remaining_vacancies={remaining}"
+            )
 
-      return jsonify(payload)
+        log_text = "\n".join(log_lines)
 
-  except Exception as e:
-      print("Error in /api/run-matching:", repr(e))
-      return jsonify({"error": "Internal server error", "details": str(e)}), 500
+        payload = {
+            "students": students,
+            "course_report": course_report,
+            "unplaced": unplaced,
+            "excel_files": excel_files,
+            "log_text": log_text,
+        }
+
+        return jsonify(payload)
+
+    except Exception as e:
+        print("Error in /api/run-matching:", repr(e))
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
 
 
 if __name__ == "__main__":
